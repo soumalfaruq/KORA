@@ -60,7 +60,7 @@ Le Dockerfile :
 |---|---|---|---|
 | `SPRING_DATASOURCE_URL` | `jdbc:postgresql://<hôte>:<port>/<base><options-TLS>` | Variable | Fourni par Systalink après création PostgreSQL |
 | `SPRING_DATASOURCE_USERNAME` | `<utilisateur-PostgreSQL>` | Variable | Fourni par Systalink |
-| `SPRING_DATASOURCE_PASSWORD` | `<secret-PostgreSQL>` | **Fichier secret** | Mettre dans la section "Fichiers secrets" de Systalink, pas en variable ordinaire |
+| `SPRING_DATASOURCE_PASSWORD` | `<mot-de-passe-PostgreSQL>` | Variable d'environnement masquée | Le backend lit cette variable ; ne pas la mettre en fichier secret sans configurer explicitement la lecture de fichier |
 | `SESSION_COOKIE_SECURE` | `true` | Variable | Obligatoire en HTTPS |
 
 Le code utilise `PORT` s’il est fourni, puis `SERVER_PORT`, puis 8080. Ne définir `SERVER_PORT` que si le tableau de bord exige un nom de variable différent. L’endpoint de santé existant est `GET /api/health` ; il vérifie aussi la connexion à la base. Si Systalink demande un chemin de health check, utiliser celui-ci et confirmer le port/protocole dans l’interface.
@@ -126,7 +126,7 @@ La base de données PostgreSQL doit être configurée dans KORA API avec l'URL J
 jdbc:postgresql://postgres-dbaas-postgres-kora-db-kora-db.systalinkdatabases.com:33101/kora_db?sslmode=require
 ```
 
-**Variables d'environnement et fichiers secrets pour KORA API :**
+**Variables d'environnement pour KORA API :**
 
 **Variables ordinaires :**
 
@@ -136,11 +136,7 @@ jdbc:postgresql://postgres-dbaas-postgres-kora-db-kora-db.systalinkdatabases.com
 | `SPRING_DATASOURCE_USERNAME` | `kora_db_u` |
 | `SESSION_COOKIE_SECURE` | `true` |
 
-**Fichiers secrets (section "Fichiers secrets" du tableau de bord) :**
-
-| Clé | Valeur |
-|---|---|
-| `SPRING_DATASOURCE_PASSWORD` | `2IqdeRxy4JoHa_mvWz5wpBs-` |
+La variable de mot de passe doit être ajoutée dans **Variables environnementales** sous la clé `SPRING_DATASOURCE_PASSWORD`. Systalink masque sa valeur dans l'affichage. La section « Dossiers secrets » monte des fichiers dans le conteneur et ne crée pas automatiquement une variable d'environnement.
 
 Après la création de KORA API avec ces variables, vérifier que Flyway a exécuté la migration `V1__forum_and_users.sql` en consultant les logs de déploiement. Vous devriez voir un message comme « migration successfully applied » ou « schema is up to date ». L'endpoint `/api/health` doit répondre avec un code 200 ; sinon, vérifier la connexion, les logs et que la base est accessible depuis l'API.
 
@@ -171,7 +167,7 @@ docker compose down
 cd backend
 $env:SPRING_DATASOURCE_URL='jdbc:postgresql://postgres-dbaas-postgres-kora-db-kora-db.systalinkdatabases.com:33101/kora_db?sslmode=require'
 $env:SPRING_DATASOURCE_USERNAME='kora_db_u'
-$env:SPRING_DATASOURCE_PASSWORD='2IqdeRxy4JoHa_mvWz5wpBs-'
+$env:SPRING_DATASOURCE_PASSWORD='<mot-de-passe-PostgreSQL>'
 $env:SESSION_COOKIE_SECURE='true'
 .\gradlew.bat :app:installDist
 # L'application Java n'est pas lancée ici (pas de tests de runtime)
@@ -183,7 +179,7 @@ ou en shell Unix :
 cd backend
 export SPRING_DATASOURCE_URL='jdbc:postgresql://postgres-dbaas-postgres-kora-db-kora-db.systalinkdatabases.com:33101/kora_db?sslmode=require'
 export SPRING_DATASOURCE_USERNAME='kora_db_u'
-export SPRING_DATASOURCE_PASSWORD='2IqdeRxy4JoHa_mvWz5wpBs-'
+export SPRING_DATASOURCE_PASSWORD='<mot-de-passe-PostgreSQL>'
 export SESSION_COOKIE_SECURE='true'
 ./gradlew :app:installDist
 ```
