@@ -41,12 +41,12 @@ Dans le tableau de bord, créer une Application Web depuis le dépôt Git KORA, 
 
 | Champ | Valeur |
 |---|---|
-| Contexte / Répertoire racine | `.` (racine du dépôt) |
-| Chemin du fichier Docker | `backend/Dockerfile` |
+| Contexte / Répertoire racine | `backend/` |
+| Chemin du fichier Docker | `Dockerfile` |
 | Branche | La branche choisie pour le déploiement |
 | Type de déploiement | Docker |
 
-⚠️ **Important** : Le Dockerfile backend a été modifié pour fonctionner avec un contexte racine. Si vous aviez configuré `backend/` comme contexte, changez-le en `.` (racine) et le chemin du Dockerfile doit être `backend/Dockerfile`.
+⚠️ **Important** : Le contexte doit être `backend/` (le répertoire contenant le Dockerfile et le code à construire). Le chemin du Dockerfile est alors `Dockerfile` (relatif au contexte).
 
 Le Dockerfile :
 
