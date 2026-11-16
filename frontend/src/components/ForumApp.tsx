@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -30,11 +30,17 @@ type Question = {
 type QuestionPage = { content: Question[]; totalElements: number; totalPages: number };
 type ApiError = { message?: string };
 
+class ApiRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { credentials: "same-origin", ...init });
   const result = (await response.json().catch(() => ({}))) as T & ApiError;
   if (!response.ok) {
-    throw new Error(result.message ?? "La demande n’a pas abouti. Réessayez.");
+    throw new ApiRequestError(result.message ?? "La demande n’a pas abouti. Réessayez.", response.status);
   }
   return result;
 }
@@ -77,6 +83,8 @@ export default function ForumApp() {
   const [loading, setLoading] = useState(true);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+  const authStateVersion = useRef(0);
   const [composeOpen, setComposeOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(false);
   const [notice, setNotice] = useState("");
@@ -105,9 +113,20 @@ export default function ForumApp() {
   }, [query, status, unanswered, page, refreshVersion]);
 
   useEffect(() => {
+    let active = true;
+    const version = authStateVersion.current;
     void jsonRequest<SessionState>("/api/auth/me")
-      .then((session) => setMember(session.user))
-      .catch(() => setMember(null));
+      .then((session) => {
+        if (active && authStateVersion.current === version) {
+          setMember(session.authenticated ? session.user : null);
+        }
+      })
+      .catch(() => {
+        if (active && authStateVersion.current === version) {
+          setError("Impossible de vérifier votre session. Réessayez dans quelques instants.");
+        }
+      });
+    return () => { active = false; };
   }, []);
 
   async function openQuestion(id: string) {
@@ -122,10 +141,12 @@ export default function ForumApp() {
 
   async function submitAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (authSubmitting) return;
     const data = new FormData(event.currentTarget);
     const username = String(data.get("username") ?? "");
     const password = String(data.get("password") ?? "");
     setError("");
+    setAuthSubmitting(true);
     try {
       if (authMode === "register") {
         await postJson("/api/auth/register", {
@@ -136,17 +157,28 @@ export default function ForumApp() {
         });
       }
       const loggedIn = await postJson<Member>("/api/auth/login", { username, password });
+      authStateVersion.current += 1;
       setMember(loggedIn);
       setAuthOpen(false);
+      setError("");
       setNotice(`Bienvenue, ${loggedIn.displayName}.`);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Connexion impossible.");
+      if (reason instanceof ApiRequestError && reason.status === 401) {
+        setError("Pseudonyme ou mot de passe incorrect.");
+      } else if (reason instanceof ApiRequestError && reason.status === 409) {
+        setError("Ce pseudonyme ou cette adresse e-mail est déjà utilisé·e.");
+      } else {
+        setError(reason instanceof Error ? reason.message : "Connexion impossible.");
+      }
+    } finally {
+      setAuthSubmitting(false);
     }
   }
 
   async function signOut() {
     try {
       await postJson<{ loggedOut: boolean }>("/api/auth/logout");
+      authStateVersion.current += 1;
       setMember(null);
       setNotice("Vous êtes déconnecté·e.");
       setSelected(null);
@@ -341,11 +373,11 @@ export default function ForumApp() {
                 <p className="eyebrow eyebrow-dark">VOTRE ESPACE KORA</p>
                 <h2 id="auth-heading">{authMode === "login" ? "Ravi·e de vous revoir" : "Rejoindre KORA"}</h2>
               </div>
-              <button className="text-button" type="button" onClick={() => setAuthOpen(false)}>Fermer</button>
+              <button className="text-button" type="button" onClick={() => setAuthOpen(false)} disabled={authSubmitting}>Fermer</button>
             </div>
             <div className="mode-switch" aria-label="Type de formulaire">
-              <button type="button" aria-pressed={authMode === "login"} onClick={() => setAuthMode("login")}>Connexion</button>
-              <button type="button" aria-pressed={authMode === "register"} onClick={() => setAuthMode("register")}>Créer un compte</button>
+              <button type="button" aria-pressed={authMode === "login"} onClick={() => setAuthMode("login")} disabled={authSubmitting}>Connexion</button>
+              <button type="button" aria-pressed={authMode === "register"} onClick={() => setAuthMode("register")} disabled={authSubmitting}>Créer un compte</button>
             </div>
             <form className="form-grid" onSubmit={submitAuth}>
               {authMode === "register" && (
@@ -356,8 +388,8 @@ export default function ForumApp() {
               )}
               <label>Pseudonyme<input autoComplete="username" name="username" required minLength={3} maxLength={32} pattern="[A-Za-z0-9_]+" /></label>
               <label>Mot de passe<input autoComplete={authMode === "login" ? "current-password" : "new-password"} name="password" type="password" required minLength={authMode === "login" ? 1 : 12} maxLength={128} /></label>
-              <button className="button button-primary form-submit" type="submit">
-                {authMode === "login" ? "Se connecter" : "Créer mon compte"}
+              <button className="button button-primary form-submit" type="submit" disabled={authSubmitting} aria-busy={authSubmitting}>
+                {authSubmitting ? "Veuillez patienter…" : authMode === "login" ? "Se connecter" : "Créer mon compte"}
               </button>
             </form>
             {authMode === "register" && <p className="form-hint">Utilisez au moins 12 caractères pour votre mot de passe.</p>}

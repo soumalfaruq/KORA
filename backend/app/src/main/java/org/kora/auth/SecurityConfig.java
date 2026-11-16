@@ -18,7 +18,7 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 public class SecurityConfig {
     @Bean
     UserDetailsService userDetailsService(MemberRepository members) {
-        return username -> members.findByUsername(username)
+        return username -> members.findByUsernameIgnoreCase(username)
                 .map(member -> User.withUsername(member.getUsername())
                         .password(member.getPasswordHash())
                         .roles(member.getRole())

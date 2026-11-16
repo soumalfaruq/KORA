@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.Map;
+import java.util.Locale;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -53,7 +54,7 @@ public class AuthController {
     @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.CREATED)
     public MemberView register(@Valid @RequestBody RegisterRequest request) {
         String username = request.username().trim();
-        String email = request.email().trim().toLowerCase();
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
         if (members.existsByUsernameIgnoreCase(username) || members.existsByEmailIgnoreCase(email)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username or email is already in use");
         }
@@ -71,7 +72,7 @@ public class AuthController {
             HttpServletRequest servletRequest,
             HttpServletResponse servletResponse) {
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.username(), request.password()));
+                    new UsernamePasswordAuthenticationToken(request.username().trim(), request.password()));
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
@@ -79,7 +80,7 @@ public class AuthController {
             servletRequest.changeSessionId();
         }
         contexts.saveContext(context, servletRequest, servletResponse);
-        Member member = members.findByUsername(authentication.getName())
+        Member member = members.findByUsernameIgnoreCase(authentication.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
         return MemberView.from(member);
     }
@@ -101,7 +102,7 @@ public class AuthController {
         if (authentication == null || authentication instanceof AnonymousAuthenticationToken) {
             return new SessionView(false, null);
         }
-        Member member = members.findByUsername(authentication.getName())
+        Member member = members.findByUsernameIgnoreCase(authentication.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
         return new SessionView(true, MemberView.from(member));
     }
