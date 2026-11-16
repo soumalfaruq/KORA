@@ -121,6 +121,10 @@ a {
   gap: 12px;
 }
 
+.question-action-label-compact {
+  display: none;
+}
+
 .member-label {
   max-width: 180px;
   overflow: hidden;
@@ -1107,6 +1111,14 @@ a {
     order: 2;
   }
 
+  .forum-layout:has(.question-detail) .discussion-column {
+    display: none;
+  }
+
+  .forum-layout:has(.question-detail) .sidebar {
+    order: 0;
+  }
+
   .search-panel {
     padding: 13px;
   }
@@ -1163,6 +1175,30 @@ a {
 
   .footer > span {
     margin-left: auto;
+  }
+}
+
+@media (max-width: 360px) {
+  .topbar {
+    gap: 10px;
+  }
+
+  .top-actions {
+    gap: 5px;
+  }
+
+  .top-actions .button {
+    padding: 6px 8px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .question-action-label {
+    display: none;
+  }
+
+  .question-action-label-compact {
+    display: inline;
   }
 }
 

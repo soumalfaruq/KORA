@@ -12,7 +12,7 @@ The repository contained only a placeholder README. There was no application cod
 - [x] Local Docker Compose configuration and focused tests.
 - [ ] P0 forum work: verify question editing end to end; then question deletion, answer editing/deletion, comments, and reactions.
 - [x] Systalink Web deployment: the public frontend responds with HTTP 200.
-- [ ] Systalink API and production validation: `/api/health` currently responds with HTTP 404; resolve the API deployment/routing issue, then verify database connectivity and end-to-end flows.
+- [ ] Systalink API and production validation: both the API domain and the Web proxy return HTTP 404 `text/html` for `/api/health`. The Web service's `KORA_API_URL` points to the API domain, and the API's Docker root is `backend/`; investigate Systalink routing/startup, then verify database connectivity and end-to-end flows.
 - [ ] Complete community and project workflows.
 - [ ] Notifications, moderation queue, administration, full i18n, and broader profile/preferences flows.
 - [ ] Production TLS, backup automation, rate limiting, and operational hardening.
@@ -48,5 +48,5 @@ These are baseline results from the earlier forum lot; they do not verify the ne
 - Spring Boot honors the platform-provided `PORT`, while preserving the local default of 8080. The frontend build now requires `KORA_API_URL` in production and the image no longer fixes `PORT`.
 - Docker build contexts exclude local environment files. Compose keeps PostgreSQL and API unexposed and binds the Web port to host loopback for the Caddy VPS fallback.
 - `docs/deployment/SYSTALINK-QUICKSTART.md` documents the verified public product claims separately from dashboard-only settings. PostgreSQL managed is confirmed; its password must remain a dashboard environment secret, and the JDBC URL uses `sslmode=require`.
-- The frontend is deployed and responds with HTTP 200. The API health endpoint returns HTTP 404 from the public endpoint, so API routing/rollout and database connectivity remain unresolved. No production end-to-end forum workflow has been verified.
+- The frontend is deployed and responds with HTTP 200. The Systalink dashboard confirms `KORA_API_URL` points to the API service, whose Docker root is `backend/`; database URL, username, password variable, and secure-cookie setting are configured. Direct API and frontend-proxied `/api/health` checks both return HTTP 404 `text/html`, not the expected JSON. Systalink's events/logs pages returned 503 and its serverless console rejected a read-only health-check command as unauthorized, so service startup/routing cannot be diagnosed or changed from the current dashboard session. No production end-to-end forum workflow has been verified, and test registration cannot proceed.
 - Docker Desktop remains unavailable locally; this does not block the remote Systalink deployments. COLIMA was not accessed.

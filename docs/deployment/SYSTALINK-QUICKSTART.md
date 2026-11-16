@@ -65,6 +65,8 @@ Le Dockerfile :
 
 Le code utilise `PORT` s’il est fourni, puis `SERVER_PORT`, puis 8080. Ne définir `SERVER_PORT` que si le tableau de bord exige un nom de variable différent. L’endpoint de santé existant est `GET /api/health` ; il vérifie aussi la connexion à la base. Si Systalink demande un chemin de health check, utiliser celui-ci et confirmer le port/protocole dans l’interface.
 
+La vérification est réussie uniquement si la réponse est du JSON `{"status":"ok"}`. Une page HTML « Service temporarily unavailable », même servie avec HTTP 200, indique que le proxy ne joint pas l'API prête à répondre ; vérifier l'état du service, ses journaux de démarrage et sa configuration avant de tester l'inscription.
+
 `ddl-auto` est en mode `validate` et Flyway est activé : la migration existante `V1__forum_and_users.sql` est exécutée au démarrage sur une base vide. Vérifier les logs de migration avant la recette.
 
 ## 4. Créer KORA Web

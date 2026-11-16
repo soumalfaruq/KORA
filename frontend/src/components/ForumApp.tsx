@@ -28,7 +28,16 @@ type Question = {
   answers?: Answer[];
 };
 type QuestionPage = { content: Question[]; totalElements: number; totalPages: number };
-type ApiError = { message?: string };
+
+const API_ROUTE_PATHS = new Set([
+  "/api/health",
+  "/api/auth/csrf",
+  "/api/auth/me",
+  "/api/auth/register",
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/api/questions",
+]);
 
 class ApiRequestError extends Error {
   constructor(message: string, readonly status: number) {
@@ -36,13 +45,67 @@ class ApiRequestError extends Error {
   }
 }
 
-async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { credentials: "same-origin", ...init });
-  const result = (await response.json().catch(() => ({}))) as T & ApiError;
-  if (!response.ok) {
-    throw new ApiRequestError(result.message ?? "La demande n’a pas abouti. Réessayez.", response.status);
+function apiFailureMessage(status: number, url: string, payload: unknown) {
+  const path = url.split("?")[0];
+  if (status === 404 && API_ROUTE_PATHS.has(path)) {
+    return "Route API introuvable (404). Vérifiez le déploiement de l’API KORA et la configuration de KORA_API_URL.";
   }
-  return result;
+  if (status === 404) {
+    return "La discussion ou la ressource demandée est introuvable (404).";
+  }
+  if (status === 401) {
+    return "Votre session a expiré. Reconnectez-vous puis réessayez.";
+  }
+  if (status === 403) {
+    return "Cette action est refusée (403). Vérifiez votre session et vos droits.";
+  }
+  if (status >= 500) {
+    return `Le serveur KORA rencontre un problème (HTTP ${status}). Réessayez plus tard.`;
+  }
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "message" in payload &&
+    typeof payload.message === "string" &&
+    payload.message.trim()
+  ) {
+    return payload.message;
+  }
+  return `La demande a échoué (HTTP ${status}). Vérifiez les informations puis réessayez.`;
+}
+
+async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(url, { credentials: "same-origin", ...init });
+  } catch (reason) {
+    if (reason instanceof Error && reason.name === "AbortError") throw reason;
+    throw new Error("Impossible de joindre le serveur KORA. Vérifiez votre connexion ou réessayez plus tard.");
+  }
+
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  const isJson = contentType.includes("/json") || contentType.includes("+json");
+  if (response.ok && !isJson) {
+    if (contentType.includes("text/html")) {
+      throw new Error(
+        "L’API KORA est indisponible : la plateforme renvoie une page HTML au lieu de la réponse attendue. Vérifiez le déploiement et les journaux de l’API, puis réessayez.",
+      );
+    }
+    throw new Error("Le serveur KORA a renvoyé un format de réponse inattendu. Réessayez plus tard.");
+  }
+
+  let result: unknown;
+  try {
+    result = await response.json();
+  } catch {
+    if (response.ok) {
+      throw new Error("Le serveur KORA a renvoyé une réponse invalide. Réessayez plus tard.");
+    }
+  }
+  if (!response.ok) {
+    throw new ApiRequestError(apiFailureMessage(response.status, url, result), response.status);
+  }
+  return result as T;
 }
 
 async function postJson<T>(url: string, body?: unknown, method = "POST"): Promise<T> {
@@ -89,6 +152,9 @@ export default function ForumApp() {
   const [editingQuestion, setEditingQuestion] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [questionLoadError, setQuestionLoadError] = useState("");
+  const selectedQuestionId = selected?.id;
+  const hasActiveFilters = Boolean(query || status || unanswered);
 
   useEffect(() => {
     let active = true;
@@ -99,12 +165,18 @@ export default function ForumApp() {
     void jsonRequest<QuestionPage>(`/api/questions?${params}`)
       .then((result) => {
         if (!active) return;
+        setQuestionLoadError("");
         setQuestions(result.content);
         setTotal(result.totalElements);
         setTotalPages(result.totalPages);
       })
       .catch((reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : "Impossible de charger les discussions.");
+        if (active) {
+          setQuestionLoadError(reason instanceof Error ? reason.message : "Impossible de charger les discussions.");
+          setQuestions([]);
+          setTotal(0);
+          setTotalPages(0);
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -121,13 +193,21 @@ export default function ForumApp() {
           setMember(session.authenticated ? session.user : null);
         }
       })
-      .catch(() => {
+      .catch((reason: unknown) => {
         if (active && authStateVersion.current === version) {
-          setError("Impossible de vérifier votre session. Réessayez dans quelques instants.");
+          setError(reason instanceof Error ? reason.message : "Impossible de vérifier votre session.");
         }
       });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!selectedQuestionId || window.matchMedia("(min-width: 681px)").matches) return;
+    document.getElementById("question-detail")?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "start",
+    });
+  }, [selectedQuestionId]);
 
   async function openQuestion(id: string) {
     setError("");
@@ -277,9 +357,11 @@ export default function ForumApp() {
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setLoading(true);
     setQuery(queryInput.trim());
     setPage(0);
     setSelected(null);
+    setRefreshVersion((version) => version + 1);
   }
 
   return (
@@ -317,9 +399,11 @@ export default function ForumApp() {
           <button
             className="button button-primary"
             onClick={() => setComposeOpen((open) => !open)}
+            aria-label="Poser une question"
             type="button"
           >
-            Poser une question
+            <span className="question-action-label">Poser une question</span>
+            <span className="question-action-label-compact" aria-hidden="true">Question</span>
           </button>
         </div>
       </header>
@@ -450,12 +534,33 @@ export default function ForumApp() {
 
             {loading ? (
               <div className="empty-state" role="status"><span className="loading-dot" /> Chargement des discussions…</div>
+            ) : questionLoadError ? (
+              <div className="empty-state" role="alert">
+                <span className="empty-icon" aria-hidden="true">!</span>
+                <h3>Impossible de charger les discussions</h3>
+                <p>{questionLoadError}</p>
+                <button
+                  className="button button-quiet"
+                  onClick={() => { setLoading(true); setRefreshVersion((version) => version + 1); }}
+                  type="button"
+                >
+                  Réessayer
+                </button>
+              </div>
             ) : questions.length === 0 ? (
               <div className="empty-state">
                 <span className="empty-icon" aria-hidden="true">?</span>
-                <h3>Aucune discussion pour le moment</h3>
-                <p>Essayez un autre filtre, ou lancez la conversation avec votre première question.</p>
-                <button className="text-button" type="button" onClick={() => setComposeOpen(true)}>Poser une question <span aria-hidden="true">→</span></button>
+                <h3>{hasActiveFilters ? "Aucun résultat" : "Aucune discussion pour le moment"}</h3>
+                <p>
+                  {hasActiveFilters
+                    ? "Modifiez votre recherche ou vos filtres pour trouver une discussion."
+                    : "Lancez la conversation avec votre première question."}
+                </p>
+                {!hasActiveFilters && (
+                  <button className="text-button" type="button" onClick={() => setComposeOpen(true)}>
+                    Poser une question <span aria-hidden="true">→</span>
+                  </button>
+                )}
               </div>
             ) : (
               <div className="question-list">
@@ -510,7 +615,7 @@ export default function ForumApp() {
 
           <aside className="sidebar">
             {selected ? (
-              <section className="panel question-detail" aria-live="polite">
+              <section className="panel question-detail" id="question-detail" aria-label="Détail de la question" aria-live="polite">
                 <button className="back-link" type="button" onClick={() => setSelected(null)}>← Toutes les discussions</button>
                 <div className="detail-meta">
                   <span className={`status-pill status-${selected.status.toLowerCase()}`}>
