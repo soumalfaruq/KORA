@@ -147,6 +147,13 @@ export default function ForumApp() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [sessionError, setSessionError] = useState("");
+  const authPanelRef = useRef<HTMLElement | null>(null);
+  const authFirstInputRef = useRef<HTMLInputElement | null>(null);
+  const authOpenerRef = useRef<HTMLElement | null>(null);
+  const authTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const memberLabelRef = useRef<HTMLSpanElement | null>(null);
   const authStateVersion = useRef(0);
   const [composeOpen, setComposeOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(false);
@@ -191,15 +198,25 @@ export default function ForumApp() {
       .then((session) => {
         if (active && authStateVersion.current === version) {
           setMember(session.authenticated ? session.user : null);
+          setSessionError("");
         }
       })
       .catch((reason: unknown) => {
         if (active && authStateVersion.current === version) {
-          setError(reason instanceof Error ? reason.message : "Impossible de vérifier votre session.");
+          setSessionError(reason instanceof Error ? reason.message : "Impossible de vérifier votre session.");
         }
       });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!authOpen) return;
+    authPanelRef.current?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "center",
+    });
+    authFirstInputRef.current?.focus({ preventScroll: true });
+  }, [authOpen]);
 
   useEffect(() => {
     if (!selectedQuestionId || window.matchMedia("(min-width: 681px)").matches) return;
@@ -219,6 +236,31 @@ export default function ForumApp() {
     }
   }
 
+  function openAuth(mode: "login" | "register", trigger?: HTMLElement | null, message = "") {
+    const alreadyOpen = authOpen;
+    authOpenerRef.current = trigger ?? authTriggerRef.current;
+    setAuthMode(mode);
+    setAuthError("");
+    setError("");
+    setNotice(message);
+    setAuthOpen(true);
+    if (alreadyOpen) {
+      window.requestAnimationFrame(() => {
+        authPanelRef.current?.scrollIntoView({
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+          block: "center",
+        });
+        authFirstInputRef.current?.focus({ preventScroll: true });
+      });
+    }
+  }
+
+  function closeAuth(trigger?: HTMLElement) {
+    setAuthOpen(false);
+    setAuthError("");
+    (trigger ?? authOpenerRef.current)?.focus();
+  }
+
   async function submitAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (authSubmitting) return;
@@ -226,6 +268,7 @@ export default function ForumApp() {
     const username = String(data.get("username") ?? "");
     const password = String(data.get("password") ?? "");
     setError("");
+    setAuthError("");
     setAuthSubmitting(true);
     try {
       if (authMode === "register") {
@@ -240,15 +283,18 @@ export default function ForumApp() {
       authStateVersion.current += 1;
       setMember(loggedIn);
       setAuthOpen(false);
+      setAuthError("");
+      setSessionError("");
       setError("");
       setNotice(`Bienvenue, ${loggedIn.displayName}.`);
+      window.requestAnimationFrame(() => memberLabelRef.current?.focus());
     } catch (reason) {
       if (reason instanceof ApiRequestError && reason.status === 401) {
-        setError("Pseudonyme ou mot de passe incorrect.");
+        setAuthError("Pseudonyme ou mot de passe incorrect.");
       } else if (reason instanceof ApiRequestError && reason.status === 409) {
-        setError("Ce pseudonyme ou cette adresse e-mail est déjà utilisé·e.");
+        setAuthError("Ce pseudonyme ou cette adresse e-mail est déjà utilisé·e.");
       } else {
-        setError(reason instanceof Error ? reason.message : "Connexion impossible.");
+        setAuthError(reason instanceof Error ? reason.message : "Connexion impossible.");
       }
     } finally {
       setAuthSubmitting(false);
@@ -260,9 +306,11 @@ export default function ForumApp() {
       await postJson<{ loggedOut: boolean }>("/api/auth/logout");
       authStateVersion.current += 1;
       setMember(null);
+      setSessionError("");
       setNotice("Vous êtes déconnecté·e.");
       setSelected(null);
       setEditingQuestion(false);
+      window.requestAnimationFrame(() => authTriggerRef.current?.focus());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Déconnexion impossible.");
     }
@@ -272,9 +320,7 @@ export default function ForumApp() {
     event.preventDefault();
     const form = event.currentTarget;
     if (!member) {
-      setAuthMode("login");
-      setAuthOpen(true);
-      setNotice("Connectez-vous pour publier une question.");
+      openAuth("login", null, "Connectez-vous pour publier une question.");
       return;
     }
     const data = new FormData(event.currentTarget);
@@ -384,16 +430,25 @@ export default function ForumApp() {
         <div className="top-actions">
           {member ? (
             <>
-              <span className="member-label">Bonjour, {member.displayName}</span>
+              <span className="member-label" ref={memberLabelRef} tabIndex={-1}>Bonjour, {member.displayName}</span>
               <button className="button button-quiet" onClick={signOut} type="button">Déconnexion</button>
             </>
           ) : (
             <button
+              ref={authTriggerRef}
               className="button button-quiet"
-              onClick={() => { setAuthMode("login"); setAuthOpen((open) => !open); }}
+              onClick={(event) => {
+                if (authOpen) closeAuth(event.currentTarget);
+                else openAuth("login", event.currentTarget);
+              }}
+              aria-expanded={authOpen}
+              aria-controls={authOpen ? "auth-panel" : undefined}
+              aria-label={authOpen ? "Fermer l’authentification" : "Connexion ou créer un compte"}
+              disabled={authSubmitting}
               type="button"
             >
-              Connexion
+              <span className="auth-action-label">{authOpen ? "Fermer" : "Connexion / Inscription"}</span>
+              <span className="auth-action-label-compact" aria-hidden="true">{authOpen ? "Fermer" : "Compte"}</span>
             </button>
           )}
           <button
@@ -442,8 +497,10 @@ export default function ForumApp() {
             <p className="eyebrow eyebrow-dark">LA COMMUNAUTÉ EN ACTION</p>
             <h2>Discussions récentes</h2>
           </div>
-          <p className="discussion-count">
-            <strong>{total}</strong> {total === 1 ? "résultat" : "résultats"}
+          <p className="discussion-count" aria-live="polite">
+            {loading ? "Chargement…" : questionLoadError ? "Service indisponible" : (
+              <><strong>{total}</strong> {total === 1 ? "résultat" : "résultats"}</>
+            )}
           </p>
         </div>
 
@@ -451,32 +508,46 @@ export default function ForumApp() {
         {error && <p className="error-message" role="alert">{error}</p>}
 
         {authOpen && (
-          <section className="panel auth-panel" aria-labelledby="auth-heading">
+          <section
+            ref={authPanelRef}
+            className="panel auth-panel"
+            id="auth-panel"
+            aria-labelledby="auth-heading"
+            tabIndex={-1}
+          >
             <div className="panel-heading">
               <div>
                 <p className="eyebrow eyebrow-dark">VOTRE ESPACE KORA</p>
                 <h2 id="auth-heading">{authMode === "login" ? "Ravi·e de vous revoir" : "Rejoindre KORA"}</h2>
               </div>
-              <button className="text-button" type="button" onClick={() => setAuthOpen(false)} disabled={authSubmitting}>Fermer</button>
+              <button className="text-button" type="button" onClick={() => closeAuth()} disabled={authSubmitting}>Fermer</button>
             </div>
-            <div className="mode-switch" aria-label="Type de formulaire">
-              <button type="button" aria-pressed={authMode === "login"} onClick={() => setAuthMode("login")} disabled={authSubmitting}>Connexion</button>
-              <button type="button" aria-pressed={authMode === "register"} onClick={() => setAuthMode("register")} disabled={authSubmitting}>Créer un compte</button>
+            <div className="mode-switch" role="group" aria-label="Choisir une option d’authentification">
+              <button type="button" aria-pressed={authMode === "login"} onClick={() => { setAuthError(""); setAuthMode("login"); }} disabled={authSubmitting}>Connexion</button>
+              <button type="button" aria-pressed={authMode === "register"} onClick={() => { setAuthError(""); setAuthMode("register"); }} disabled={authSubmitting}>Créer un compte</button>
             </div>
+            {(authError || sessionError) && <p className="error-message auth-error" role="alert">{authError || sessionError}</p>}
             <form className="form-grid" onSubmit={submitAuth}>
               {authMode === "register" && (
                 <>
-                  <label>Nom public<input autoComplete="name" name="displayName" required minLength={2} maxLength={80} /></label>
+                  <label>Nom public<input ref={authFirstInputRef} autoComplete="name" name="displayName" required minLength={2} maxLength={80} /></label>
                   <label>Adresse e-mail<input autoComplete="email" name="email" type="email" required maxLength={254} /></label>
                 </>
               )}
-              <label>Pseudonyme<input autoComplete="username" name="username" required minLength={3} maxLength={32} pattern="[A-Za-z0-9_]+" /></label>
-              <label>Mot de passe<input autoComplete={authMode === "login" ? "current-password" : "new-password"} name="password" type="password" required minLength={authMode === "login" ? 1 : 12} maxLength={128} /></label>
+              <label>
+                Pseudonyme
+                <input ref={authMode === "login" ? authFirstInputRef : null} autoComplete="username" name="username" required minLength={3} maxLength={32} pattern="[A-Za-z0-9_]+" />
+                <span className="field-hint">3 à 32 caractères : lettres, chiffres ou _.</span>
+              </label>
+              <label>
+                Mot de passe
+                <input autoComplete={authMode === "login" ? "current-password" : "new-password"} name="password" type="password" required minLength={authMode === "login" ? 1 : 12} maxLength={128} />
+                {authMode === "register" && <span className="field-hint">12 caractères minimum.</span>}
+              </label>
               <button className="button button-primary form-submit" type="submit" disabled={authSubmitting} aria-busy={authSubmitting}>
                 {authSubmitting ? "Veuillez patienter…" : authMode === "login" ? "Se connecter" : "Créer mon compte"}
               </button>
             </form>
-            {authMode === "register" && <p className="form-hint">Utilisez au moins 12 caractères pour votre mot de passe.</p>}
           </section>
         )}
 
@@ -503,7 +574,7 @@ export default function ForumApp() {
         )}
 
         <div className="forum-layout">
-          <section className="discussion-column" aria-label="Liste des discussions">
+          <section className="discussion-column" aria-label="Liste des discussions" aria-busy={loading}>
             <form className="search-panel" onSubmit={submitSearch}>
               <label className="search-label" htmlFor="question-search">Rechercher dans les discussions</label>
               <div className="search-controls">
@@ -535,7 +606,7 @@ export default function ForumApp() {
             {loading ? (
               <div className="empty-state" role="status"><span className="loading-dot" /> Chargement des discussions…</div>
             ) : questionLoadError ? (
-              <div className="empty-state" role="alert">
+              <div className="empty-state error-state" role="alert">
                 <span className="empty-icon" aria-hidden="true">!</span>
                 <h3>Impossible de charger les discussions</h3>
                 <p>{questionLoadError}</p>
@@ -690,7 +761,13 @@ export default function ForumApp() {
                       <button className="button button-primary" type="submit">Publier la réponse</button>
                     </form>
                   ) : (
-                    <button className="button button-primary answer-login" onClick={() => { setAuthMode("login"); setAuthOpen(true); }} type="button">Connectez-vous pour répondre</button>
+                    <button
+                      className="button button-primary answer-login"
+                      onClick={(event) => openAuth("login", event.currentTarget, "Connectez-vous pour répondre à cette discussion.")}
+                      type="button"
+                    >
+                      Connectez-vous pour répondre
+                    </button>
                   )
                 )}
               </section>
