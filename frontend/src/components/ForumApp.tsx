@@ -22,6 +22,7 @@ type Question = {
   tags: string[];
   answerCount?: number;
   createdAt: string;
+  updatedAt: string;
   acceptedAnswerId?: string | null;
   answers?: Answer[];
 };
@@ -53,6 +54,13 @@ function dateLabel(value: string) {
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(new Date(value));
 }
 
+function parseTags(value: FormDataEntryValue | null) {
+  return String(value ?? "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
 export default function ForumApp() {
   const [member, setMember] = useState<Member | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -69,6 +77,7 @@ export default function ForumApp() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [composeOpen, setComposeOpen] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
@@ -102,6 +111,7 @@ export default function ForumApp() {
 
   async function openQuestion(id: string) {
     setError("");
+    setEditingQuestion(false);
     try {
       setSelected(await jsonRequest<Question>(`/api/questions/${id}`));
     } catch (reason) {
@@ -139,6 +149,7 @@ export default function ForumApp() {
       setMember(null);
       setNotice("Vous êtes déconnecté·e.");
       setSelected(null);
+      setEditingQuestion(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Déconnexion impossible.");
     }
@@ -158,10 +169,7 @@ export default function ForumApp() {
       const question = await postJson<Question>("/api/questions", {
         title: data.get("title"),
         body: data.get("body"),
-        tags: String(data.get("tags") ?? "")
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter(Boolean),
+        tags: parseTags(data.get("tags")),
       });
       setComposeOpen(false);
       form.reset();
@@ -171,6 +179,31 @@ export default function ForumApp() {
       setRefreshVersion((version) => version + 1);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "La question n’a pas pu être publiée.");
+    }
+  }
+
+  async function submitQuestionUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected) return;
+    const data = new FormData(event.currentTarget);
+    setError("");
+    try {
+      const updated = await postJson<Question>(
+        `/api/questions/${selected.id}`,
+        {
+          title: data.get("title"),
+          body: data.get("body"),
+          tags: parseTags(data.get("tags")),
+        },
+        "PUT",
+      );
+      setSelected(updated);
+      setEditingQuestion(false);
+      setNotice("Votre question a été mise à jour.");
+      setLoading(true);
+      setRefreshVersion((version) => version + 1);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "La question n’a pas pu être mise à jour.");
     }
   }
 
@@ -438,10 +471,46 @@ export default function ForumApp() {
                   </span>
                   <span>{dateLabel(selected.createdAt)}</span>
                 </div>
-                <h2>{selected.title}</h2>
-                <p className="detail-author">Par {selected.author}</p>
-                <div className="tag-list detail-tags">{selected.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}</div>
-                <p className="detail-body">{selected.body}</p>
+                {Date.parse(selected.updatedAt) > Date.parse(selected.createdAt) && (
+                  <p className="detail-updated">Modifiée le {dateLabel(selected.updatedAt)}</p>
+                )}
+                {member?.username === selected.authorUsername && !editingQuestion && (
+                  <button
+                    className="text-button question-edit-toggle"
+                    type="button"
+                    onClick={() => setEditingQuestion(true)}
+                  >
+                    Modifier ma question
+                  </button>
+                )}
+                {editingQuestion ? (
+                  <form className="form-grid question-edit-form" onSubmit={submitQuestionUpdate}>
+                    <label>
+                      Titre
+                      <input name="title" defaultValue={selected.title} required maxLength={180} />
+                    </label>
+                    <label>
+                      Description
+                      <textarea name="body" defaultValue={selected.body} required maxLength={20000} rows={6} />
+                    </label>
+                    <label>
+                      Tags, séparés par des virgules
+                      <input name="tags" defaultValue={selected.tags.join(", ")} />
+                    </label>
+                    <p className="form-hint">Le texte reste affiché en texte brut. Vous pouvez retirer tous les tags.</p>
+                    <div className="form-actions">
+                      <button className="button button-primary" type="submit">Enregistrer les modifications</button>
+                      <button className="text-button" type="button" onClick={() => setEditingQuestion(false)}>Annuler</button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <h2>{selected.title}</h2>
+                    <p className="detail-author">Par {selected.author}</p>
+                    <div className="tag-list detail-tags">{selected.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}</div>
+                    <p className="detail-body">{selected.body}</p>
+                  </>
+                )}
                 <div className="answers-heading">
                   <h3>Réponses</h3><span>{selected.answers?.length ?? 0}</span>
                 </div>

@@ -1,6 +1,6 @@
 .git
 .gradle
-app/build/*
-!app/build/install
-!app/build/install/app
-!app/build/install/app/**
+**/.gradle
+**/build
+.env
+.env.*

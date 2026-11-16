@@ -59,23 +59,24 @@ public class QuestionService {
     @Transactional
     public QuestionDetail create(String username, CreateQuestionRequest request) {
         Member author = findMember(username);
-        LinkedHashSet<String> tags = new LinkedHashSet<>();
-        for (String tag : request.tags()) {
-            String normalized = tag.trim().toLowerCase(Locale.ROOT);
-            if (!TAG_PATTERN.matcher(normalized).matches()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tags may contain letters, numbers, +, #, . and -");
-            }
-            tags.add(normalized);
-        }
-        if (tags.size() > 8) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A question can have at most 8 tags");
-        }
+        LinkedHashSet<String> tags = normalizeTags(request.tags());
         Question question = questions.save(new Question(
                 request.title().trim(),
                 request.body().trim(),
                 author,
                 tags));
         return QuestionDetail.from(question, List.of());
+    }
+
+    @Transactional
+    public QuestionDetail updateQuestion(String username, UUID questionId, UpdateQuestionRequest request) {
+        Question question = findQuestion(questionId);
+        if (!question.getAuthor().getUsername().equals(username)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the question author can edit it");
+        }
+        LinkedHashSet<String> tags = normalizeTags(request.tags());
+        question.edit(request.title().trim(), request.body().trim(), tags);
+        return QuestionDetail.from(question, question.getAnswers().stream().map(AnswerView::from).toList());
     }
 
     @Transactional
@@ -103,6 +104,21 @@ public class QuestionService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, exception.getMessage());
         }
         return QuestionDetail.from(question, question.getAnswers().stream().map(AnswerView::from).toList());
+    }
+
+    private LinkedHashSet<String> normalizeTags(List<String> tags) {
+        LinkedHashSet<String> normalizedTags = new LinkedHashSet<>();
+        for (String tag : tags) {
+            String normalized = tag.trim().toLowerCase(Locale.ROOT);
+            if (!TAG_PATTERN.matcher(normalized).matches()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tags may contain letters, numbers, +, #, . and -");
+            }
+            normalizedTags.add(normalized);
+        }
+        if (normalizedTags.size() > 8) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A question can have at most 8 tags");
+        }
+        return normalizedTags;
     }
 
     private Question findQuestion(UUID id) {
@@ -134,6 +150,14 @@ public class QuestionService {
             @jakarta.validation.constraints.NotNull
             @jakarta.validation.constraints.Size(max = 8) List<@jakarta.validation.constraints.NotBlank String> tags) {}
 
+    public record UpdateQuestionRequest(
+            @jakarta.validation.constraints.NotBlank
+            @jakarta.validation.constraints.Size(max = 180) String title,
+            @jakarta.validation.constraints.NotBlank
+            @jakarta.validation.constraints.Size(max = 20000) String body,
+            @jakarta.validation.constraints.NotNull
+            @jakarta.validation.constraints.Size(max = 8) List<@jakarta.validation.constraints.NotBlank String> tags) {}
+
     public record AnswerRequest(
             @jakarta.validation.constraints.NotBlank
             @jakarta.validation.constraints.Size(max = 20000) String body) {}
@@ -146,7 +170,8 @@ public class QuestionService {
             String author,
             List<String> tags,
             int answerCount,
-            java.time.Instant createdAt) {
+            java.time.Instant createdAt,
+            java.time.Instant updatedAt) {
         static QuestionSummary from(Question question) {
             return new QuestionSummary(
                     question.getId(),
@@ -156,7 +181,8 @@ public class QuestionService {
                     question.getAuthor().getDisplayName(),
                     List.copyOf(question.getTags()),
                     question.getAnswers().size(),
-                    question.getCreatedAt());
+                    question.getCreatedAt(),
+                    question.getUpdatedAt());
         }
     }
 
@@ -181,6 +207,7 @@ public class QuestionService {
             String authorUsername,
             List<String> tags,
             java.time.Instant createdAt,
+            java.time.Instant updatedAt,
             UUID acceptedAnswerId,
             List<AnswerView> answers) {
         static QuestionDetail from(Question question, List<AnswerView> answers) {
@@ -193,6 +220,7 @@ public class QuestionService {
                     question.getAuthor().getUsername(),
                     List.copyOf(question.getTags()),
                     question.getCreatedAt(),
+                    question.getUpdatedAt(),
                     question.getAcceptedAnswer() == null ? null : question.getAcceptedAnswer().getId(),
                     answers);
         }

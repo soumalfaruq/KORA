@@ -852,6 +852,27 @@ a {
   font-size: 11px;
 }
 
+.detail-updated {
+  margin: -7px 0 8px;
+  color: #78868d;
+  font-size: 10px;
+}
+
+.question-edit-toggle {
+  margin: 0 0 10px;
+}
+
+.question-edit-form {
+  margin-top: 13px;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  grid-column: 1 / -1;
+}
+
 .detail-tags {
   margin-top: 11px;
 }

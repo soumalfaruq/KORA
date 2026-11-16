@@ -83,6 +83,16 @@ public class Question {
         updatedAt = Instant.now();
     }
 
+    public void edit(String title, String body, Set<String> tags) {
+        if (!this.title.equals(title) || !this.body.equals(body) || !this.tags.equals(tags)) {
+            this.title = title;
+            this.body = body;
+            this.tags.clear();
+            this.tags.addAll(tags);
+            updatedAt = Instant.now();
+        }
+    }
+
     public void addAnswer(Answer answer) {
         if (status != QuestionStatus.OPEN) {
             throw new IllegalStateException("Only open questions can receive answers");
@@ -124,5 +134,9 @@ public class Question {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
     }
 }

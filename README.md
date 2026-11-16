@@ -4,12 +4,10 @@ KORA is a discussion platform for African developers and the diaspora. This repo
 
 ## Run locally
 
-Requirements: Node.js 22+, Java 17+ (Java 25 is the target where available), Gradle wrapper, and Docker Compose.
+To run the local stack, Docker Compose is required. Native checks need Node.js 22+, Java 17+, and the Gradle wrapper.
 
 1. Copy `.env.example` to `.env` and replace the local-only database password.
-2. Build the API distribution with `cd backend && ./gradlew :app:installDist`.
-3. Build the frontend image output with `cd frontend && npm ci && KORA_API_URL=http://api:8080 npm run build`.
-4. Start the stack with `docker compose up --build` and open <http://localhost:3000>.
+2. Start the stack with `docker compose up --build` and open <http://localhost:3000>. The Dockerfiles build the API and frontend from source.
 
 The first implemented vertical slice is account registration/sign-in and the discussion forum: search and filter questions, create a question, answer it, and accept a solution as its author. PostgreSQL data is persistent in the Compose volume.
 
