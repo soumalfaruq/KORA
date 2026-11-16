@@ -147,6 +147,7 @@ export default function ForumApp() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [authError, setAuthError] = useState("");
   const [sessionError, setSessionError] = useState("");
   const authPanelRef = useRef<HTMLElement | null>(null);
@@ -211,12 +212,22 @@ export default function ForumApp() {
 
   useEffect(() => {
     if (!authOpen) return;
-    authPanelRef.current?.scrollIntoView({
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-      block: "center",
-    });
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     authFirstInputRef.current?.focus({ preventScroll: true });
-  }, [authOpen]);
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape" || authSubmitting) return;
+      event.preventDefault();
+      setAuthOpen(false);
+      setAuthError("");
+      authOpenerRef.current?.focus();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [authOpen, authSubmitting]);
 
   useEffect(() => {
     if (!selectedQuestionId || window.matchMedia("(min-width: 681px)").matches) return;
@@ -240,18 +251,13 @@ export default function ForumApp() {
     const alreadyOpen = authOpen;
     authOpenerRef.current = trigger ?? authTriggerRef.current;
     setAuthMode(mode);
+    setPasswordVisible(false);
     setAuthError("");
     setError("");
     setNotice(message);
     setAuthOpen(true);
     if (alreadyOpen) {
-      window.requestAnimationFrame(() => {
-        authPanelRef.current?.scrollIntoView({
-          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-          block: "center",
-        });
-        authFirstInputRef.current?.focus({ preventScroll: true });
-      });
+      window.requestAnimationFrame(() => authFirstInputRef.current?.focus({ preventScroll: true }));
     }
   }
 
@@ -447,8 +453,8 @@ export default function ForumApp() {
               disabled={authSubmitting}
               type="button"
             >
-              <span className="auth-action-label">{authOpen ? "Fermer" : "Connexion / Inscription"}</span>
-              <span className="auth-action-label-compact" aria-hidden="true">{authOpen ? "Fermer" : "Compte"}</span>
+              <span className="auth-action-label">Connexion</span>
+              <span className="auth-action-label-compact" aria-hidden="true">Compte</span>
             </button>
           )}
           <button
@@ -457,6 +463,7 @@ export default function ForumApp() {
             aria-label="Poser une question"
             type="button"
           >
+            <span className="question-action-icon" aria-hidden="true">+</span>
             <span className="question-action-label">Poser une question</span>
             <span className="question-action-label-compact" aria-hidden="true">Question</span>
           </button>
@@ -508,47 +515,152 @@ export default function ForumApp() {
         {error && <p className="error-message" role="alert">{error}</p>}
 
         {authOpen && (
-          <section
-            ref={authPanelRef}
-            className="panel auth-panel"
-            id="auth-panel"
-            aria-labelledby="auth-heading"
-            tabIndex={-1}
-          >
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow eyebrow-dark">VOTRE ESPACE KORA</p>
-                <h2 id="auth-heading">{authMode === "login" ? "Ravi·e de vous revoir" : "Rejoindre KORA"}</h2>
-              </div>
-              <button className="text-button" type="button" onClick={() => closeAuth()} disabled={authSubmitting}>Fermer</button>
-            </div>
-            <div className="mode-switch" role="group" aria-label="Choisir une option d’authentification">
-              <button type="button" aria-pressed={authMode === "login"} onClick={() => { setAuthError(""); setAuthMode("login"); }} disabled={authSubmitting}>Connexion</button>
-              <button type="button" aria-pressed={authMode === "register"} onClick={() => { setAuthError(""); setAuthMode("register"); }} disabled={authSubmitting}>Créer un compte</button>
-            </div>
-            {(authError || sessionError) && <p className="error-message auth-error" role="alert">{authError || sessionError}</p>}
-            <form className="form-grid" onSubmit={submitAuth}>
-              {authMode === "register" && (
-                <>
-                  <label>Nom public<input ref={authFirstInputRef} autoComplete="name" name="displayName" required minLength={2} maxLength={80} /></label>
-                  <label>Adresse e-mail<input autoComplete="email" name="email" type="email" required maxLength={254} /></label>
-                </>
-              )}
-              <label>
-                Pseudonyme
-                <input ref={authMode === "login" ? authFirstInputRef : null} autoComplete="username" name="username" required minLength={3} maxLength={32} pattern="[A-Za-z0-9_]+" />
-                <span className="field-hint">3 à 32 caractères : lettres, chiffres ou _.</span>
-              </label>
-              <label>
-                Mot de passe
-                <input autoComplete={authMode === "login" ? "current-password" : "new-password"} name="password" type="password" required minLength={authMode === "login" ? 1 : 12} maxLength={128} />
-                {authMode === "register" && <span className="field-hint">12 caractères minimum.</span>}
-              </label>
-              <button className="button button-primary form-submit" type="submit" disabled={authSubmitting} aria-busy={authSubmitting}>
-                {authSubmitting ? "Veuillez patienter…" : authMode === "login" ? "Se connecter" : "Créer mon compte"}
+          <div className="auth-overlay" onClick={() => { if (!authSubmitting) closeAuth(); }}>
+            <section
+              ref={authPanelRef}
+              className="auth-dialog"
+              id="auth-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="auth-heading"
+              tabIndex={-1}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                className="auth-close"
+                type="button"
+                onClick={() => closeAuth()}
+                disabled={authSubmitting}
+                aria-label="Fermer"
+              >
+                <span aria-hidden="true">×</span>
               </button>
-            </form>
-          </section>
+              <Image
+                className="auth-logo"
+                src="/kora-logo-mark.png"
+                alt="KORA"
+                width={537}
+                height={221}
+              />
+              <h2 id="auth-heading">
+                {authMode === "login" ? "Bienvenue sur Kora" : "Rejoindre Kora"}
+              </h2>
+              <p className="auth-lead">
+                {authMode === "login"
+                  ? "Connectez-vous pour participer aux discussions, poser des questions et partager vos connaissances."
+                  : "Créez votre compte pour participer aux discussions et partager vos connaissances."}
+              </p>
+              <div className="mode-switch" role="group" aria-label="Choisir une option d’authentification">
+                <button type="button" aria-pressed={authMode === "login"} onClick={() => { setAuthError(""); setPasswordVisible(false); setAuthMode("login"); }} disabled={authSubmitting}>
+                  <span className="mode-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="8" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="M5.5 19.2c.8-3 3.2-4.6 6.5-4.6s5.7 1.6 6.5 4.6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+                  </span>
+                  Connexion
+                </button>
+                <button type="button" aria-pressed={authMode === "register"} onClick={() => { setAuthError(""); setPasswordVisible(false); setAuthMode("register"); }} disabled={authSubmitting}>
+                  <span className="mode-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="9" cy="8.5" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="M3.8 18.5c.6-2.6 2.6-4 5.2-4s4.6 1.4 5.2 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><path d="M17 8.2v5.2M14.4 10.8h5.2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+                  </span>
+                  Créer un compte
+                </button>
+              </div>
+              {authError && <p className="error-message auth-error" role="alert">{authError}</p>}
+              <form className="auth-form" onSubmit={submitAuth}>
+                {authMode === "register" && (
+                  <>
+                    <label>
+                      Nom public
+                      <input ref={authFirstInputRef} autoComplete="name" name="displayName" required minLength={2} maxLength={80} placeholder="Votre nom public" />
+                    </label>
+                    <label>
+                      Adresse e-mail
+                      <span className="auth-field">
+                        <span className="auth-field-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" width="16" height="16"><rect x="3.5" y="5.5" width="17" height="13" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" /><path d="M4.5 7.2 12 12.4l7.5-5.2" fill="none" stroke="currentColor" strokeWidth="1.7" /></svg>
+                        </span>
+                        <input autoComplete="email" name="email" type="email" required maxLength={254} placeholder="Votre adresse e-mail" />
+                      </span>
+                    </label>
+                  </>
+                )}
+                <label>
+                  {authMode === "login" ? "Pseudonyme ou e-mail" : "Pseudonyme"}
+                  <span className="auth-field">
+                    <span className="auth-field-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="16" height="16"><rect x="3.5" y="5.5" width="17" height="13" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" /><path d="M4.5 7.2 12 12.4l7.5-5.2" fill="none" stroke="currentColor" strokeWidth="1.7" /></svg>
+                    </span>
+                    <input
+                      ref={authMode === "login" ? authFirstInputRef : null}
+                      autoComplete="username"
+                      name="username"
+                      required
+                      minLength={authMode === "login" ? 1 : 3}
+                      maxLength={254}
+                      pattern={authMode === "login" ? undefined : "[A-Za-z0-9_]+"}
+                      placeholder={authMode === "login" ? "Votre pseudonyme ou adresse e-mail" : "Votre pseudonyme"}
+                    />
+                  </span>
+                  {authMode === "register" && <span className="field-hint">3 à 32 caractères : lettres, chiffres ou _.</span>}
+                </label>
+                <label>
+                  Mot de passe
+                  <span className="auth-field">
+                    <span className="auth-field-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="16" height="16"><rect x="5" y="10.5" width="14" height="9" rx="1.8" fill="none" stroke="currentColor" strokeWidth="1.7" /><path d="M8.2 10.5V8.2a3.8 3.8 0 0 1 7.6 0v2.3" fill="none" stroke="currentColor" strokeWidth="1.7" /></svg>
+                    </span>
+                    <input
+                      autoComplete={authMode === "login" ? "current-password" : "new-password"}
+                      name="password"
+                      type={passwordVisible ? "text" : "password"}
+                      required
+                      minLength={authMode === "login" ? 1 : 12}
+                      maxLength={128}
+                      placeholder="Votre mot de passe"
+                    />
+                    <button
+                      className="auth-visibility"
+                      type="button"
+                      onClick={() => setPasswordVisible((visible) => !visible)}
+                      aria-label={passwordVisible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                      aria-pressed={passwordVisible}
+                    >
+                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                        <path d="M2.8 12S6.4 6.6 12 6.6 21.2 12 21.2 12 17.6 17.4 12 17.4 2.8 12 2.8 12Z" fill="none" stroke="currentColor" strokeWidth="1.7" />
+                        <circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.7" />
+                        {passwordVisible && <path d="M5 18.5 19 6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />}
+                      </svg>
+                    </button>
+                  </span>
+                  {authMode === "register" && <span className="field-hint">12 caractères minimum.</span>}
+                </label>
+                {authMode === "login" && (
+                  <div className="auth-options">
+                    <label className="auth-remember">
+                      <input type="checkbox" name="remember" />
+                      Se souvenir de moi
+                    </label>
+                    <span className="auth-forgot">Mot de passe oublié ?</span>
+                  </div>
+                )}
+                <button className="button button-primary auth-submit" type="submit" disabled={authSubmitting} aria-busy={authSubmitting}>
+                  <span className="auth-submit-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="16" height="16"><path d="M5 12h12M13 7.5 17.8 12 13 16.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </span>
+                  {authSubmitting ? "Veuillez patienter…" : authMode === "login" ? "Se connecter" : "Créer mon compte"}
+                </button>
+              </form>
+              <p className="auth-switch">
+                {authMode === "login" ? "Pas encore de compte ?" : "Déjà un compte ?"}
+                <button
+                  type="button"
+                  onClick={() => { setAuthError(""); setPasswordVisible(false); setAuthMode(authMode === "login" ? "register" : "login"); }}
+                  disabled={authSubmitting}
+                >
+                  {authMode === "login" ? "Créer un compte" : "Se connecter"}
+                </button>
+              </p>
+            </section>
+          </div>
         )}
 
         {composeOpen && (
