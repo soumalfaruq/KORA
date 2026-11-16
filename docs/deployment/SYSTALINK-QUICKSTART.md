@@ -60,7 +60,7 @@ Le Dockerfile :
 |---|---|---|---|
 | `SPRING_DATASOURCE_URL` | `jdbc:postgresql://<hôte>:<port>/<base><options-TLS>` | Variable | Fourni par Systalink après création PostgreSQL |
 | `SPRING_DATASOURCE_USERNAME` | `<utilisateur-PostgreSQL>` | Variable | Fourni par Systalink |
-| `SPRING_DATASOURCE_PASSWORD` | `<mot-de-passe-PostgreSQL>` | Variable d'environnement masquée | Le backend lit cette variable ; ne pas la mettre en fichier secret sans configurer explicitement la lecture de fichier |
+| `SPRING_DATASOURCE_PASSWORD` | <mot-de-passe-à-configurer> | Variable d'environnement masquée | Le backend lit cette variable ; ne pas la mettre en fichier secret sans configurer explicitement la lecture de fichier |
 | `SESSION_COOKIE_SECURE` | `true` | Variable | Obligatoire en HTTPS |
 
 Le code utilise `PORT` s’il est fourni, puis `SERVER_PORT`, puis 8080. Ne définir `SERVER_PORT` que si le tableau de bord exige un nom de variable différent. L’endpoint de santé existant est `GET /api/health` ; il vérifie aussi la connexion à la base. Si Systalink demande un chemin de health check, utiliser celui-ci et confirmer le port/protocole dans l’interface.
@@ -115,8 +115,8 @@ Systalink propose PostgreSQL géré. Les paramètres de connexion sont :
 | Port | `33101` |
 | Nom de base | `kora_db` |
 | Utilisateur | `kora_db_u` |
-| Mot de passe | `2IqdeRxy4JoHa_mvWz5wpBs-` |
-| URL PostgreSQL | `postgresql://kora_db_u:2IqdeRxy4JoHa_mvWz5wpBs-@postgres-dbaas-postgres-kora-db-kora-db.systalinkdatabases.com:33101/kora_db` |
+| Mot de passe | <mot-de-passe-à-configurer> |
+| URL PostgreSQL | `postgresql://<utilisateur>:<mot-de-passe>@<hôte>:<port>/<base>` |
 
 **Construction de l'URL JDBC pour Spring Boot :**
 

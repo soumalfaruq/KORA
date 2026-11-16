@@ -81,16 +81,17 @@ a {
 }
 
 .wordmark {
-  color: var(--navy);
-  font-size: 27px;
-  font-weight: 850;
-  letter-spacing: -1.7px;
-  line-height: 1;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  line-height: 0;
   text-decoration: none;
 }
 
-.wordmark span {
-  color: var(--green);
+.wordmark-image {
+  display: block;
+  width: 146px;
+  height: auto;
 }
 
 .top-nav,
@@ -239,20 +240,15 @@ a {
   transform: translateY(-45%);
 }
 
-.hero-mark {
-  display: grid;
-  width: 67px;
-  height: 67px;
-  place-items: center;
-  border: 1px solid rgb(255 255 255 / 27%);
-  border-radius: 50%;
-  color: var(--gold);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 34px;
+.hero-logo {
+  display: block;
+  width: 145px;
+  height: auto;
+  margin-bottom: 14px;
 }
 
 .hero-aside p {
-  margin: 14px 0 5px;
+  margin: 0 0 5px;
   color: #d6e0e3;
   font-size: 13px;
 }
@@ -978,8 +974,8 @@ a {
   font-size: 11px;
 }
 
-.wordmark-footer {
-  font-size: 19px;
+.wordmark-footer .wordmark-image {
+  width: 114px;
 }
 
 .footer p {
@@ -1030,8 +1026,12 @@ a {
     gap: 15px;
   }
 
-  .wordmark {
-    font-size: 24px;
+  .wordmark-image {
+    width: 102px;
+  }
+
+  .wordmark-footer .wordmark-image {
+    width: 100px;
   }
 
   .top-nav {

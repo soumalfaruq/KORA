@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 
 type Member = { username: string; displayName: string };
@@ -253,7 +254,14 @@ export default function ForumApp() {
     <main className="app-shell">
       <header className="topbar">
         <Link className="wordmark" href="/" aria-label="KORA, accueil">
-          KORA<span>.</span>
+          <Image
+            className="wordmark-image"
+            src="/kora-logo-color.png"
+            alt="KORA"
+            width={542}
+            height={226}
+            priority
+          />
         </Link>
         <nav className="top-nav" aria-label="Navigation principale">
           <a className="nav-active" href="#discussions">Discussions</a>
@@ -298,7 +306,14 @@ export default function ForumApp() {
           </button>
         </div>
         <div className="hero-aside" aria-label="Principes de la communauté">
-          <div className="hero-mark" aria-hidden="true">K</div>
+          <Image
+            className="hero-logo"
+            src="/kora-logo-white.png"
+            alt=""
+            width={303}
+            height={127}
+            aria-hidden="true"
+          />
           <p>Pour les développeurs,<br /><strong>par les développeurs.</strong></p>
           <span className="hero-location">Une voix panafricaine, ouverte à tous.</span>
         </div>
@@ -561,7 +576,9 @@ export default function ForumApp() {
       </div>
 
       <footer className="footer">
-        <Link className="wordmark wordmark-footer" href="/">KORA<span>.</span></Link>
+        <Link className="wordmark wordmark-footer" href="/" aria-label="KORA, accueil">
+          <Image className="wordmark-image" src="/kora-logo-color.png" alt="KORA" width={542} height={226} />
+        </Link>
         <p>Construisons ensemble une communauté tech qui nous ressemble.</p>
         <span>© KORA</span>
       </footer>
